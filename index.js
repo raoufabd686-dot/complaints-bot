@@ -25,19 +25,21 @@ const client = new Client({
   ]
 });
 
+// 🔧 IDs
 const SUPPORT_CHANNEL = "1514233580115591250";
 const LOG_CHANNEL = "1514233580115591250";
 
-// 📦 Database
+// 📦 DB
 let db = fs.existsSync("./db.json")
   ? JSON.parse(fs.readFileSync("./db.json", "utf8"))
-  : { count: 0, tickets: {} };
+  : { count: 0, tickets: {}, cooldown: {} };
 
-const saveDB = () => fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
+const saveDB = () =>
+  fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
 
 // ================= READY =================
 client.once("ready", async () => {
-  console.log(`✅ ${client.user.tag} is ONLINE`);
+  console.log(`✅ ${client.user.tag} ONLINE`);
 
   const channel = await client.channels.fetch(SUPPORT_CHANNEL);
 
@@ -52,16 +54,16 @@ client.once("ready", async () => {
 
   const row = new ActionRowBuilder().addComponents(menu);
 
-  await channel.send({
-    content: `🚨 **ONE MISSION | REAL RP SYSTEM**
+  channel.send({
+    content: `🚨 ONE MISSION | SYSTEM
 
-👋 مرحباً بك في نظام الشكاوى الرسمي
+👋 مرحباً بك في نظام الشكاوى
 
-🟢 ضد لاعب  
-🔴 ضد إداري  
-🟡 ضد قائد فصيل  
+🟢 لاعب  
+🔴 إداري  
+🟡 قائد فصيل  
 
-👇 اختر نوع الشكوى`,
+اختر نوع الشكوى 👇`,
     components: [row]
   });
 });
@@ -69,20 +71,35 @@ client.once("ready", async () => {
 // ================= INTERACTIONS =================
 client.on(Events.InteractionCreate, async (interaction) => {
 
-  // 🎯 اختيار النوع
+  // 🎯 اختيار نوع الشكوى
   if (interaction.isStringSelectMenu()) {
 
     const type = interaction.values[0];
 
     const modal = new ModalBuilder()
       .setCustomId(type)
-      .setTitle("One Mission Complaint Form");
+      .setTitle("One Mission Complaint");
 
     const fields = [
-      new TextInputBuilder().setCustomId("name").setLabel("اسمك في اللعبة").setStyle(TextInputStyle.Short),
-      new TextInputBuilder().setCustomId("target").setLabel("اسم الشخص المشكو عليه").setStyle(TextInputStyle.Short),
-      new TextInputBuilder().setCustomId("server").setLabel("اسم السيرفر").setStyle(TextInputStyle.Short),
-      new TextInputBuilder().setCustomId("proof").setLabel("الدليل (صورة / رابط)").setStyle(TextInputStyle.Paragraph)
+      new TextInputBuilder()
+        .setCustomId("name")
+        .setLabel("اسمك في اللعبة")
+        .setStyle(TextInputStyle.Short),
+
+      new TextInputBuilder()
+        .setCustomId("target")
+        .setLabel("اسم الشخص المشكو عليه")
+        .setStyle(TextInputStyle.Short),
+
+      new TextInputBuilder()
+        .setCustomId("server")
+        .setLabel("اسم السيرفر")
+        .setStyle(TextInputStyle.Short),
+
+      new TextInputBuilder()
+        .setCustomId("proof")
+        .setLabel("الدليل")
+        .setStyle(TextInputStyle.Paragraph)
     ];
 
     modal.addComponents(
@@ -95,13 +112,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // 📩 إرسال الشكوى
+  // ================= إنشاء شكوى =================
   if (interaction.isModalSubmit()) {
 
+    const userId = interaction.user.id;
+
+    // ⛔ Anti spam (5 دقائق)
+    if (db.cooldown[userId] && Date.now() - db.cooldown[userId] < 300000) {
+      return interaction.reply({
+        content: "⛔ انتظر 5 دقائق قبل إرسال شكوى جديدة",
+        ephemeral: true
+      });
+    }
+
+    db.cooldown[userId] = Date.now();
+
     const id = ++db.count;
+    const ticketID = `OM-${String(id).padStart(4, "0")}`;
 
     const data = {
-      id,
+      id: ticketID,
       type: interaction.customId,
       name: interaction.fields.getTextInputValue("name"),
       target: interaction.fields.getTextInputValue("target"),
@@ -111,14 +141,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       time: new Date().toLocaleString("ar-DZ")
     };
 
-    db.tickets[id] = data;
+    db.tickets[ticketID] = data;
     saveDB();
 
     const guild = interaction.guild;
 
-    // 🎫 إنشاء روم تكت
+    // 🎫 تكت
     const ticketChannel = await guild.channels.create({
-      name: `om-ticket-${id}`,
+      name: `ticket-${ticketID}`,
       type: ChannelType.GuildText,
       permissionOverwrites: [
         {
@@ -138,7 +168,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const embed = new EmbedBuilder()
       .setColor("Blue")
-      .setTitle(`📩 ONE MISSION TICKET #${id}`)
+      .setTitle(`📩 Ticket ${ticketID}`)
       .addFields(
         { name: "👤 الاسم", value: data.name },
         { name: "🎯 الهدف", value: data.target },
@@ -146,24 +176,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         { name: "📎 الدليل", value: data.proof },
         { name: "🕒 الوقت", value: data.time },
         { name: "📌 الحالة", value: data.status }
-      )
-      .setFooter({ text: "One Mission RP System" });
+      );
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`accept_${id}`)
-        .setLabel("قبول")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId(`reject_${id}`)
-        .setLabel("رفض")
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId(`close_${id}`)
-        .setLabel("إغلاق")
-        .setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`accept_${ticketID}`).setLabel("قبول").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`reject_${ticketID}`).setLabel("رفض").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`close_${ticketID}`).setLabel("إغلاق").setStyle(ButtonStyle.Secondary)
     );
 
     await ticketChannel.send({
@@ -173,15 +191,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
 
     await interaction.reply({
-      content: `✅ تم فتح التكت: ${ticketChannel}`,
+      content: `✅ تم إنشاء الشكوى ${ticketID}`,
       ephemeral: true
     });
 
     const log = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
-    if (log) log.send(`📊 Ticket #${id} opened by ${interaction.user.tag}`);
+    if (log) log.send(`📊 Ticket ${ticketID} opened by ${interaction.user.tag}`);
   }
 
-  // ⚙️ أزرار الإدارة
+  // ================= أزرار =================
   if (interaction.isButton()) {
 
     const [action, id] = interaction.customId.split("_");
@@ -189,20 +207,50 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!ticket) return;
 
+    // 👮 صلاحية إداري
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ content: "❌ ليس لديك صلاحية", ephemeral: true });
     }
 
+    // 🔒 إغلاق
+    if (action === "close") {
+      ticket.status = "CLOSED";
+      saveDB();
+
+      await interaction.reply({
+        content: "✍️ تم إغلاق الشكوى (ممكن تضيف سبب يدوي)",
+        ephemeral: true
+      });
+    }
+
     if (action === "accept") ticket.status = "ACCEPTED";
     if (action === "reject") ticket.status = "REJECTED";
-    if (action === "close") ticket.status = "CLOSED";
 
     saveDB();
 
     await interaction.reply({
-      content: `✅ تم ${action} التكت #${id}`,
+      content: `✅ تم ${action} الشكوى ${id}`,
       ephemeral: true
     });
+
+    // ⭐ تقييم بعد الإغلاق
+    if (action === "close") {
+      const rating = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`rate_1_${id}`).setLabel("⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rate_2_${id}`).setLabel("⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rate_3_${id}`).setLabel("⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rate_4_${id}`).setLabel("⭐⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rate_5_${id}`).setLabel("⭐⭐⭐⭐⭐").setStyle(ButtonStyle.Success)
+      );
+
+      const user = await client.users.fetch(interaction.user.id).catch(() => null);
+      if (user) {
+        user.send({
+          content: `⭐ قيّم تجربتك مع الشكوى ${id}`,
+          components: [rating]
+        }).catch(() => {});
+      }
+    }
   }
 });
 
