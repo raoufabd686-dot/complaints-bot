@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
 const http = require("http");
 
 const client = new Client({
@@ -9,55 +9,102 @@ const client = new Client({
   ]
 });
 
-// ✅ ID روم الشكاوى جاهز
+// روم الشكاوى
 const COMPLAINTS_CHANNEL_ID = "1514233580115591250";
 
 client.once("ready", () => {
   console.log(`${client.user.tag} is online`);
 });
 
+// فتح نظام الشكاوى
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
 
-  // 🟢 ping
-  if (message.content === "!ping") {
-    return message.reply("🟢 البوت يعمل بنجاح");
-  }
+  if (message.content === "!report") {
 
-  // 📋 help
-  if (message.content === "!help") {
-    return message.reply(`
-📋 أوامر البوت:
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("complaint_menu")
+      .setPlaceholder("📌 اختر نوع الشكوى")
+      .addOptions([
+        {
+          label: "شكوى ضد لاعب",
+          value: "player",
+          emoji: "🟢"
+        },
+        {
+          label: "شكوى ضد إداري",
+          value: "admin",
+          emoji: "🔴"
+        },
+        {
+          label: "شكوى ضد قائد فصيل",
+          value: "leader",
+          emoji: "🟡"
+        }
+      ]);
 
-!ping - اختبار البوت
-!help - عرض الأوامر
-!complaint <نص الشكوى>
-    `);
-  }
+    const row = new ActionRowBuilder().addComponents(menu);
 
-  // 🎫 نظام الشكاوى
-  if (message.content.startsWith("!complaint")) {
-    const text = message.content.replace("!complaint", "").trim();
+    message.reply({
+      content: `🚨 **شكاوى One Mission**
 
-    if (!text) {
-      return message.reply("❌ اكتب الشكوى بعد الأمر");
-    }
+👋 مرحباً بك في نظام الشكاوى
 
-    const channel = message.guild.channels.cache.get(COMPLAINTS_CHANNEL_ID);
+يرجى تقديم الشكوى بشكل واضح مع الأدلة إن وجدت.
 
-    if (!channel) {
-      return message.reply("❌ روم الشكاوى غير موجود أو البوت ما عنده صلاحية");
-    }
+🙏 شكراً لتعاونك معنا
 
-    channel.send(
-      `📩 شكوى جديدة\n👤 من: ${message.author.tag}\n📝 الشكوى: ${text}`
-    );
+━━━━━━━━━━━━━━
 
-    return message.reply("✅ تم إرسال الشكوى بنجاح");
+📌 النتيجة داخل اللعبة:
+
+🟢 شكوى ضد لاعب  
+🔴 شكوى ضد إداري  
+🟡 شكوى ضد قائد فصيل`,
+      components: [row]
+    });
   }
 });
 
-// 🌐 سيرفر Render
+// استقبال الاختيار
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isStringSelectMenu()) return;
+
+  const channel = interaction.guild.channels.cache.get(COMPLAINTS_CHANNEL_ID);
+
+  if (!channel) {
+    return interaction.reply({ content: "❌ روم الشكاوى غير موجود", ephemeral: true });
+  }
+
+  let type = "";
+
+  switch (interaction.values[0]) {
+    case "player":
+      type = "🟢 شكوى ضد لاعب";
+      break;
+    case "admin":
+      type = "🔴 شكوى ضد إداري";
+      break;
+    case "leader":
+      type = "🟡 شكوى ضد قائد فصيل";
+      break;
+  }
+
+  channel.send({
+    content: `📩 **شكوى جديدة**
+
+👤 من: ${interaction.user.tag}
+📌 النوع: ${type}
+🕒 الوقت: ${new Date().toLocaleString()}`
+  });
+
+  interaction.reply({
+    content: "✅ تم إرسال شكواك بنجاح",
+    ephemeral: true
+  });
+});
+
+// سيرفر Render
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end("Bot is running!");
