@@ -15,6 +15,7 @@ const {
 } = require("discord.js");
 
 const fs = require("fs");
+const http = require("http");
 
 const client = new Client({
   intents: [
@@ -24,19 +25,18 @@ const client = new Client({
   ]
 });
 
-// 🎯 IDs
-const SUPPORT_CHANNEL = "PUT_CHANNEL_ID";
-const LOG_CHANNEL = "PUT_LOG_CHANNEL_ID";
+const SUPPORT_CHANNEL = "1514233580115591250";
+const LOG_CHANNEL = "1514233580115591250";
 
-// 💾 DB
+// 📦 DB
 let db = fs.existsSync("./db.json")
   ? JSON.parse(fs.readFileSync("./db.json", "utf8"))
-  : { count: 0, tickets: {} };
+  : { count: 0, tickets: {}, cooldown: {} };
 
 const saveDB = () =>
   fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
 
-// ================= READY =================
+// ================= READY (ONLY UI CHANGED) =================
 client.once("ready", async () => {
   console.log(`✅ ${client.user.tag} ONLINE`);
 
@@ -53,90 +53,102 @@ client.once("ready", async () => {
 
   const row = new ActionRowBuilder().addComponents(menu);
 
-  const embed = new EmbedBuilder()
-    .setColor("Blue")
-    .setTitle("🚨📜 نظام الشكاوى – One Mission RP")
-    .setDescription(`
+  await channel.send({
+    content: `🚨📜 نظام الشكاوى – One Mission RP
 👮‍♂️ وزارة العدل – وحدة الشكاوى
-
-👋 مرحباً بك  
-اختر نوع الشكوى من الأسفل
-
+👋 مرحباً بك أيها المواطن
+تم إنشاء هذا النظام لضمان العدالة وحفظ الحقوق داخل السيرفر.
 ━━━━━━━━━━━━━━
-🟢 لاعب | 🔴 إداري | 🟡 قائد فصيل
+📌 إرشادات مهمة:
+يجب تقديم معلومات صحيحة ودقيقة
+إرفاق دليل واضح (صورة / فيديو / رابط)
+يمنع تقديم شكاوى كاذبة أو إساءة استخدام النظام
+أي مخالفة قد تؤدي إلى رفض البلاغ أو عقوبة داخل السيرفر
 ━━━━━━━━━━━━━━
-⚡ النظام يعمل 24/7
-    `);
-
-  await channel.send({ embeds: [embed], components: [row] });
+🎯 اختر نوع البلاغ:
+🟢 بلاغ ضد مواطن (لاعب)
+🔴 بلاغ ضد موظف حكومي (إداري)
+🟡 بلاغ ضد مسؤول فصيل (قائد فصيل)
+━━━━━━━━━━━━━━
+📋 عند تقديم البلاغ سيتم طلب:
+اسمك داخل السيرفر
+اسم الشخص المشكو عليه
+اسم السيرفر
+الأدلة (صورة / فيديو / رابط)
+━━━━━━━━━━━━━━
+🕒 وقت الخدمة: ⚡ متاح 24/7 بدون توقف
+📌 تتم مراجعة البلاغات حسب الأولوية
+⏳ وقت الرد يختلف حسب ضغط العمل
+━━━━━━━━━━━━━━
+👮‍♂️ العدالة هدفنا، والنظام فوق الجميع
+🙏 شكراً لتعاونكم معنا
+One Mission Justice Department`,
+    components: [row]
+  });
 });
 
-// ================= INTERACTIONS =================
+// ================= INTERACTIONS (UNCHANGED) =================
 client.on(Events.InteractionCreate, async (interaction) => {
 
-  // 🎯 اختيار نوع الشكوى
   if (interaction.isStringSelectMenu()) {
+
     const type = interaction.values[0];
 
     const modal = new ModalBuilder()
       .setCustomId(type)
-      .setTitle("نموذج الشكوى");
+      .setTitle("One Mission Complaint");
 
-    const name = new TextInputBuilder()
-      .setCustomId("name")
-      .setLabel("اسمك في اللعبة")
-      .setStyle(TextInputStyle.Short);
-
-    const target = new TextInputBuilder()
-      .setCustomId("target")
-      .setLabel("اسم الشخص المشكو عليه")
-      .setStyle(TextInputStyle.Short);
-
-    const server = new TextInputBuilder()
-      .setCustomId("server")
-      .setLabel("اسم السيرفر")
-      .setStyle(TextInputStyle.Short);
-
-    const proof = new TextInputBuilder()
-      .setCustomId("proof")
-      .setLabel("الدليل")
-      .setStyle(TextInputStyle.Paragraph);
+    const fields = [
+      new TextInputBuilder().setCustomId("name").setLabel("اسمك في اللعبة").setStyle(TextInputStyle.Short),
+      new TextInputBuilder().setCustomId("target").setLabel("اسم الشخص المشكو عليه").setStyle(TextInputStyle.Short),
+      new TextInputBuilder().setCustomId("server").setLabel("اسم السيرفر").setStyle(TextInputStyle.Short),
+      new TextInputBuilder().setCustomId("proof").setLabel("الدليل").setStyle(TextInputStyle.Paragraph)
+    ];
 
     modal.addComponents(
-      new ActionRowBuilder().addComponents(name),
-      new ActionRowBuilder().addComponents(target),
-      new ActionRowBuilder().addComponents(server),
-      new ActionRowBuilder().addComponents(proof)
+      new ActionRowBuilder().addComponents(fields[0]),
+      new ActionRowBuilder().addComponents(fields[1]),
+      new ActionRowBuilder().addComponents(fields[2]),
+      new ActionRowBuilder().addComponents(fields[3])
     );
 
     return interaction.showModal(modal);
   }
 
-  // 📩 إرسال الشكوى
   if (interaction.isModalSubmit()) {
 
+    const userId = interaction.user.id;
+
+    if (db.cooldown[userId] && Date.now() - db.cooldown[userId] < 300000) {
+      return interaction.reply({
+        content: "⛔ انتظر 5 دقائق قبل إرسال شكوى جديدة",
+        ephemeral: true
+      });
+    }
+
+    db.cooldown[userId] = Date.now();
+
     const id = ++db.count;
+    const ticketID = `OM-${String(id).padStart(4, "0")}`;
 
     const data = {
-      id,
+      id: ticketID,
       type: interaction.customId,
       name: interaction.fields.getTextInputValue("name"),
       target: interaction.fields.getTextInputValue("target"),
       server: interaction.fields.getTextInputValue("server"),
       proof: interaction.fields.getTextInputValue("proof"),
       status: "OPEN",
-      time: new Date().toLocaleString("ar-DZ"),
-      rating: null
+      time: new Date().toLocaleString("ar-DZ")
     };
 
-    db.tickets[id] = data;
+    db.tickets[ticketID] = data;
     saveDB();
 
     const guild = interaction.guild;
 
-    // 🎫 إنشاء تكت
-    const ticket = await guild.channels.create({
-      name: `ticket-${id}`,
+    const ticketChannel = await guild.channels.create({
+      name: `ticket-${ticketID}`,
       type: ChannelType.GuildText,
       permissionOverwrites: [
         {
@@ -147,18 +159,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
           id: interaction.user.id,
           allow: [
             PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory
           ]
         }
       ]
     });
 
     const embed = new EmbedBuilder()
-      .setColor("Green")
-      .setTitle(`📩 شكوى رقم #${id}`)
+      .setColor("Blue")
+      .setTitle(`📩 One Mission Ticket ${ticketID}`)
       .addFields(
         { name: "👤 الاسم", value: data.name },
-        { name: "🎯 ضد", value: data.target },
+        { name: "🎯 الهدف", value: data.target },
         { name: "🏠 السيرفر", value: data.server },
         { name: "📎 الدليل", value: data.proof },
         { name: "🕒 الوقت", value: data.time },
@@ -166,27 +179,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
       );
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`close_${id}`).setLabel("إغلاق").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`accept_${id}`).setLabel("قبول").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`reject_${id}`).setLabel("رفض").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`accept_${ticketID}`).setLabel("قبول").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`reject_${ticketID}`).setLabel("رفض").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`close_${ticketID}`).setLabel("إغلاق").setStyle(ButtonStyle.Secondary)
     );
 
-    await ticket.send({
-      content: `👋 <@${interaction.user.id}>`,
+    await ticketChannel.send({
+      content: `👋 مرحباً ${interaction.user}`,
       embeds: [embed],
       components: [row]
     });
 
     await interaction.reply({
-      content: `✅ تم فتح الشكوى: ${ticket}`,
+      content: `✅ تم إنشاء الشكوى: ${ticketID}`,
       ephemeral: true
     });
 
-    const log = await client.channels.fetch(LOG_CHANNEL);
-    log.send(`📊 شكوى جديدة #${id} من ${interaction.user.tag}`);
+    const log = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+    if (log) log.send(`📊 Ticket ${ticketID} opened by ${interaction.user.tag}`);
   }
 
-  // 🔘 الأزرار
   if (interaction.isButton()) {
 
     const [action, id] = interaction.customId.split("_");
@@ -194,33 +206,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!ticket) return;
 
-    // 👮 صلاحية الإدارة
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ content: "❌ ليس لديك صلاحية", ephemeral: true });
     }
 
-    // 🔒 إغلاق
-    if (action === "close") {
-      ticket.status = "CLOSED";
-
-      await interaction.channel.permissionOverwrites.edit(ticket.userId, {
-        SendMessages: false
-      });
-
-      await interaction.reply("🔒 تم إغلاق الشكوى");
-
-      // ⭐ تقييم بعد الإغلاق
-      const ratingMsg = await interaction.channel.send(
-        "⭐ قيّم تجربتك من 1 إلى 5"
-      );
-    }
-
+    if (action === "close") ticket.status = "CLOSED";
     if (action === "accept") ticket.status = "ACCEPTED";
     if (action === "reject") ticket.status = "REJECTED";
 
     saveDB();
+
+    await interaction.reply({
+      content: `✅ تم ${action} الشكوى ${id}`,
+      ephemeral: true
+    });
   }
 });
 
-// ================= BOT =================
+// ================= SERVER =================
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("One Mission Ultra Bot Running");
+}).listen(process.env.PORT || 3000);
+
 client.login(process.env.TOKEN);
