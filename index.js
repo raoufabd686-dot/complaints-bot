@@ -10,12 +10,37 @@ const client = new Client({
 });
 
 client.once("clientReady", () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`${client.user.tag} is online`);
 });
 
 client.on("messageCreate", (message) => {
+  if (message.author.bot) return;
+
   if (message.content === "!ping") {
-    message.reply("البوت يعمل بنجاح ✅");
+    message.reply("🟢 البوت يعمل بنجاح");
+  }
+
+  if (message.content === "!server") {
+    message.reply(
+      `🏠 اسم السيرفر: ${message.guild.name}\n👥 عدد الأعضاء: ${message.guild.memberCount}`
+    );
+  }
+
+  if (message.content === "!user") {
+    message.reply(
+      `👤 اسم المستخدم: ${message.author.username}\n🆔 المعرف: ${message.author.id}`
+    );
+  }
+
+  if (message.content === "!help") {
+    message.reply(`
+📋 أوامر البوت:
+
+🟢 !ping - اختبار البوت
+👤 !user - معلومات المستخدم
+🏠 !server - معلومات السيرفر
+📖 !help - عرض الأوامر
+    `);
   }
 });
 
