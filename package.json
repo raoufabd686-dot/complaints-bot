@@ -1,62 +1,13 @@
-const { Client, GatewayIntentBits } = require("discord.js");
-const http = require("http");
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
-client.once("clientReady", () => {
-  console.log(`${client.user.tag} is online`);
-});
-
-client.on("messageCreate", (message) => {
-  if (message.author.bot) return;
-
-  // ping
-  if (message.content === "!ping") {
-    return message.reply("🟢 البوت يعمل بنجاح");
+{
+  "name": "complaints-bot",
+  "version": "1.0.0",
+  "description": "Discord Complaints Bot",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3"
   }
-
-  // help
-  if (message.content === "!help") {
-    return message.reply(`
-📋 أوامر البوت:
-
-🟢 !ping - اختبار البوت
-👤 !user - معلومات المستخدم
-🏠 !server - معلومات السيرفر
-📖 !help - عرض الأوامر
-    `);
-  }
-
-  // server info
-  if (message.content === "!server") {
-    return message.reply(
-      `🏠 اسم السيرفر: ${message.guild.name}\n👥 عدد الأعضاء: ${message.guild.memberCount}`
-    );
-  }
-
-  // user info
-  if (message.content === "!user") {
-    return message.reply(
-      `👤 اسم المستخدم: ${message.author.username}\n🆔 ID: ${message.author.id}`
-    );
-  }
-});
-
-// ويب سيرفر حتى Render ما يوقف البوت
-const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("Bot is running!");
-});
-
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Web server started");
-});
-
-// تشغيل البوت
-client.login(process.env.TOKEN);
+}
