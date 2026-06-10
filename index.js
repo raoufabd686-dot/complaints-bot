@@ -21,100 +21,114 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.DirectMessages
   ]
 });
 
-const SUPPORT_CHANNEL = "PUT_CHANNEL_ID";
-const LOG_CHANNEL = "PUT_LOG_CHANNEL_ID";
-const ARCHIVE_CHANNEL = "1513629219094007981";
+// 📌 ROOMS (جاهزة من عندك)
+const SUPPORT_CHANNEL = "1514233580115591250";
+const ARCHIVE_CHANNEL = "1513629044241993839";
+const STATS_CHANNEL = "1514328191525716129";
+const LOG_CHANNEL = "1513629108184154282";
 
-// DB
+// 💾 DATABASE
 let db = fs.existsSync("./db.json")
-  ? JSON.parse(fs.readFileSync("./db.json", "utf8"))
-  : { count: 0, tickets: {}, cooldown: {}, ratings: {} };
+  ? JSON.parse(fs.readFileSync("./db.json"))
+  : { count: 0, tickets: {}, ratings: {} };
 
 const saveDB = () =>
   fs.writeFileSync("./db.json", JSON.stringify(db, null, 2));
 
-// ================= PAGE =================
+// ================= READY =================
 client.once("ready", async () => {
   console.log(`✅ ${client.user.tag} ONLINE`);
 
   const channel = await client.channels.fetch(SUPPORT_CHANNEL);
 
+  const embed = new EmbedBuilder()
+    .setColor("Blue")
+    .setTitle("⚖️ ONE MISSION RP")
+    .setDescription(`
+╔════════════════════════════╗
+      ✦ ONE MISSION RP ✦
+      ⚖️ MINISTRY OF JUSTICE ⚖️
+╚════════════════════════════╝
+
+👮 أهلاً وسهلاً أيها المواطنين
+
+🎯 اختر نوع الشكوى:
+🟢 لاعب
+🔴 إداري
+🟡 قائد فصيل
+    `);
+
   const menu = new StringSelectMenuBuilder()
     .setCustomId("complaint_menu")
-    .setPlaceholder("📌 اختر نوع الشكوى")
+    .setPlaceholder("اختيار نوع الشكوى")
     .addOptions([
       { label: "شكوى ضد لاعب", value: "player", emoji: "🟢" },
       { label: "شكوى ضد إداري", value: "admin", emoji: "🔴" },
       { label: "شكوى ضد قائد فصيل", value: "leader", emoji: "🟡" }
     ]);
 
-  const row = new ActionRowBuilder().addComponents(menu);
-
-  const embed = new EmbedBuilder()
-    .setColor("Blue")
-    .setTitle("🚨 ONE MISSION RP")
-    .setDescription("⚖️ نظام الشكاوى الرسمي\n🎯 اختر نوع الشكوى");
-
-  channel.send({ embeds: [embed], components: [row] });
+  await channel.send({
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(menu)]
+  });
 });
 
-// ================= INTERACTION =================
+// ================= INTERACTIONS =================
 client.on(Events.InteractionCreate, async (interaction) => {
 
   // MENU
   if (interaction.isStringSelectMenu()) {
 
+    await interaction.reply({
+      content: "⏳ يتم فتح الشكوى خلال ثواني...",
+      ephemeral: true
+    });
+
     const type = interaction.values[0];
 
-    const modal = new ModalBuilder()
-      .setCustomId(type)
-      .setTitle("تقديم شكوى");
+    setTimeout(async () => {
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("name").setLabel("اسمك").setStyle(TextInputStyle.Short)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("target").setLabel("المشكو عليه").setStyle(TextInputStyle.Short)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("server").setLabel("السيرفر").setStyle(TextInputStyle.Short)
-      ),
-      new ActionRowBuilder().addComponents(
+      const modal = new ModalBuilder()
+        .setCustomId(type)
+        .setTitle("تقديم شكوى");
+
+      const inputs = [
+        new TextInputBuilder().setCustomId("name").setLabel("اسمك").setStyle(TextInputStyle.Short),
+        new TextInputBuilder().setCustomId("server").setLabel("اسم السيرفر").setStyle(TextInputStyle.Short),
+        new TextInputBuilder().setCustomId("target").setLabel("المشكو عليه").setStyle(TextInputStyle.Short),
         new TextInputBuilder().setCustomId("proof").setLabel("الدليل").setStyle(TextInputStyle.Paragraph)
-      )
-    );
+      ];
 
-    return interaction.showModal(modal);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(inputs[0]),
+        new ActionRowBuilder().addComponents(inputs[1]),
+        new ActionRowBuilder().addComponents(inputs[2]),
+        new ActionRowBuilder().addComponents(inputs[3])
+      );
+
+      await interaction.showModal(modal);
+
+    }, 2000);
   }
 
-  // CREATE
+  // CREATE TICKET
   if (interaction.isModalSubmit()) {
 
-    const userId = interaction.user.id;
-
-    if (db.cooldown[userId] && Date.now() - db.cooldown[userId] < 300000) {
-      return interaction.reply({ content: "⛔ انتظر 5 دقائق", ephemeral: true });
-    }
-
-    db.cooldown[userId] = Date.now();
-
     const id = ++db.count;
-    const ticketID = `شكوى${id}`; // 🔥 المطلوب
+    const ticketID = `شكوى-${id}`;
 
     const data = {
       id: ticketID,
       userId: interaction.user.id,
       name: interaction.fields.getTextInputValue("name"),
-      target: interaction.fields.getTextInputValue("target"),
       server: interaction.fields.getTextInputValue("server"),
+      target: interaction.fields.getTextInputValue("target"),
       proof: interaction.fields.getTextInputValue("proof"),
-      status: "OPEN",
-      time: new Date().toLocaleString("ar-DZ")
+      status: "PENDING"
     };
 
     db.tickets[ticketID] = data;
@@ -122,43 +136,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const guild = interaction.guild;
 
-    const ticket = await guild.channels.create({
+    const channel = await guild.channels.create({
       name: ticketID,
       type: ChannelType.GuildText,
       permissionOverwrites: [
-        {
-          id: guild.roles.everyone,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
-        {
-          id: interaction.user.id,
-          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
-        }
+        { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
       ]
     });
 
-    // 📩 DM للمواطن عند الإنشاء
-    interaction.user.send(`📨 تم إنشاء ${ticketID} بنجاح`).catch(() => {});
+    // DM
+    interaction.user.send(`📩 تم إنشاء ${ticketID}`).catch(() => {});
 
     const embed = new EmbedBuilder()
-      .setColor("Green")
+      .setColor("Yellow")
       .setTitle(`📩 ${ticketID}`)
       .addFields(
         { name: "👤 الاسم", value: data.name },
-        { name: "🎯 ضد", value: data.target },
+        { name: "🏷️ السيرفر", value: data.server },
+        { name: "🎯 المشكو عليه", value: data.target },
+        { name: "📎 الدليل", value: data.proof },
         { name: "📌 الحالة", value: data.status }
       );
 
     const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`accept_${ticketID}`).setLabel("قبول").setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`close_${ticketID}`).setLabel("إغلاق").setStyle(ButtonStyle.Danger)
     );
 
-    await ticket.send({ embeds: [embed], components: [row] });
+    await channel.send({ embeds: [embed], components: [row] });
 
-    interaction.reply({ content: `✅ تم إنشاء ${ticketID}`, ephemeral: true });
+    return interaction.reply({ content: `✅ تم إنشاء ${ticketID}`, ephemeral: true });
   }
 
-  // CLOSE
+  // BUTTONS
   if (interaction.isButton()) {
 
     const [action, id] = interaction.customId.split("_");
@@ -166,83 +177,101 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!ticket) return;
 
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return interaction.reply({ content: "❌ لا صلاحية", ephemeral: true });
+
+    // ACCEPT
+    if (action === "accept") {
+
+      ticket.status = "OPEN";
+      saveDB();
+
+      const user = await client.users.fetch(ticket.userId).catch(() => null);
+      if (user) user.send(`✅ تم قبول شكواك ${id}`);
+
+      return interaction.reply({ content: "تم القبول", ephemeral: true });
     }
 
+    // CLOSE + ARCHIVE + LOG + RATING
     if (action === "close") {
 
       ticket.status = "CLOSED";
       saveDB();
 
-      // 🔒 قفل الروم
-      await interaction.channel.permissionOverwrites.edit(ticket.userId, {
-        ViewChannel: false
-      }).catch(() => {});
-
-      await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
-        ViewChannel: false
-      }).catch(() => {});
-
-      // 📁 أرشيف
-      const archive = await client.channels.fetch(ARCHIVE_CHANNEL).catch(() => null);
-
-      if (archive) {
-        archive.send({
-          embeds: [
-            new EmbedBuilder()
-              .setColor("Red")
-              .setTitle(`📁 ${id}`)
-              .addFields(
-                { name: "👤 الاسم", value: ticket.name },
-                { name: "🎯 ضد", value: ticket.target },
-                { name: "📌 الحالة", value: "CLOSED" }
-              )
-          ]
-        });
-      }
-
-      // ⭐ تقييم للمواطن
-      const ratingRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`rate_1_${id}`).setLabel("⭐").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rate_2_${id}`).setLabel("⭐⭐").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rate_3_${id}`).setLabel("⭐⭐⭐").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rate_4_${id}`).setLabel("⭐⭐⭐⭐").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rate_5_${id}`).setLabel("⭐⭐⭐⭐⭐").setStyle(ButtonStyle.Success)
-      );
-
       const user = await client.users.fetch(ticket.userId).catch(() => null);
 
+      // 📂 ARCHIVE
+      const archive = await client.channels.fetch(ARCHIVE_CHANNEL).catch(() => null);
+      if (archive) archive.send(`📦 ${id} تم إغلاقها`);
+
+      // 📜 LOG
+      const log = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+      if (log) log.send(`📜 ${id} CLOSED`);
+
+      // ⭐ RATING DM
       if (user) {
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`rate_1_${id}`).setLabel("⭐").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`rate_2_${id}`).setLabel("⭐⭐").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`rate_3_${id}`).setLabel("⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`rate_4_${id}`).setLabel("⭐⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`rate_5_${id}`).setLabel("⭐⭐⭐⭐⭐").setStyle(ButtonStyle.Success)
+        );
+
         user.send({
-          content: `📨 تم إغلاق ${ticketID}\n⭐ قيّم الشكوى`,
-          components: [ratingRow]
+          content: `🔒 تم إغلاق ${id}\n⭐ قيّم تجربتك`,
+          components: [row]
         }).catch(() => {});
       }
 
       return interaction.reply({ content: "🔒 تم الإغلاق", ephemeral: true });
     }
 
-    // ⭐ RATE
+    // ⭐ SAVE RATING
     if (action === "rate") {
 
-      const stars = id;
+      const stars = Number(id);
 
-      db.ratings[interaction.customId] = {
+      if (!db.ratings[ticket.userId]) db.ratings[ticket.userId] = [];
+
+      db.ratings[ticket.userId].push({
+        ticket: ticket.id,
         stars,
-        user: interaction.user.id
-      };
+        time: new Date().toLocaleString("ar-DZ")
+      });
 
       saveDB();
 
-      return interaction.reply({ content: "شكراً لتقييمك ⭐", ephemeral: true });
+      return interaction.reply({
+        content: `⭐ شكراً لتقييمك (${stars})`,
+        ephemeral: true
+      });
     }
   }
 });
 
-// KEEP ALIVE
-http.createServer((req, res) => {
-  res.end("Bot Running");
-}).listen(process.env.PORT || 3000);
+// 📊 STATS
+setInterval(async () => {
+
+  const channel = await client.channels.fetch(STATS_CHANNEL).catch(() => null);
+  if (!channel) return;
+
+  const total = Object.keys(db.tickets).length;
+
+  channel.send(`
+📊 WEEKLY REPORT
+
+🧾 الشكاوى: ${total}
+⭐ التقييمات: ${Object.keys(db.ratings).length}
+
+🏛️ ONE MISSION RP
+  `);
+
+}, 7 * 24 * 60 * 60 * 1000);
+
+// SERVER
+http.createServer((req, res) => res.end("Bot Running"))
+  .listen(process.env.PORT || 3000);
 
 client.login(process.env.TOKEN);
