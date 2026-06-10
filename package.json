@@ -1,18 +1,12 @@
 {
-  "name": "one-mission-complaints-bot",
+  "name": "one-mission-rp-bot",
   "version": "1.0.0",
-  "description": "One Mission RP Discord Complaints System Bot",
+  "description": "Discord RP Complaint System Bot",
   "main": "index.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
-  },
-  "engines": {
-    "node": "18.x"
+    "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.15.3",
-    "fs": "^0.0.1-security"
+    "discord.js": "^14.16.3"
   }
 }
