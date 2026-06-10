@@ -9,12 +9,14 @@ const client = new Client({
   ]
 });
 
+// ID روم الشكاوى
 const COMPLAINTS_CHANNEL_ID = "1514233580115591250";
 
 client.once("ready", () => {
   console.log(`${client.user.tag} is online`);
 });
 
+// أمر فتح النظام
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
 
@@ -24,9 +26,21 @@ client.on("messageCreate", (message) => {
       .setCustomId("complaint_menu")
       .setPlaceholder("📌 اختر نوع الشكوى")
       .addOptions([
-        { label: "شكوى ضد لاعب", value: "player", emoji: "🟢" },
-        { label: "شكوى ضد إداري", value: "admin", emoji: "🔴" },
-        { label: "شكوى ضد قائد فصيل", value: "leader", emoji: "🟡" }
+        {
+          label: "شكوى ضد لاعب",
+          value: "player",
+          emoji: "🟢"
+        },
+        {
+          label: "شكوى ضد إداري",
+          value: "admin",
+          emoji: "🔴"
+        },
+        {
+          label: "شكوى ضد قائد فصيل",
+          value: "leader",
+          emoji: "🟡"
+        }
       ]);
 
     const row = new ActionRowBuilder().addComponents(menu);
@@ -52,6 +66,7 @@ client.on("messageCreate", (message) => {
   }
 });
 
+// استقبال الاختيار
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
 
@@ -75,12 +90,15 @@ client.on("interactionCreate", async (interaction) => {
       break;
   }
 
+  // 🔥 هنا التعديل اللي طلبته
   channel.send({
-    content: `📩 شكوى جديدة
+    content: `📩 **شكوى جديدة**
 
 👤 من: ${interaction.user.tag}
 📌 النوع: ${type}
-🕒 الوقت: ${new Date().toLocaleString()}`
+🕒 الوقت: ${new Date().toLocaleString("ar-DZ")}
+
+━━━━━━━━━━━━━━`
   });
 
   interaction.reply({
@@ -89,6 +107,7 @@ client.on("interactionCreate", async (interaction) => {
   });
 });
 
+// Web server (Render)
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end("Bot is running!");
