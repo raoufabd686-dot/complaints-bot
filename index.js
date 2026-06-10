@@ -9,7 +9,7 @@ const client = new Client({
   ]
 });
 
-// حط ID روم الشكاوى هنا
+// ضع ID روم الشكاوى هنا
 const COMPLAINTS_CHANNEL_ID = "PUT_CHANNEL_ID_HERE";
 
 client.once("clientReady", () => {
